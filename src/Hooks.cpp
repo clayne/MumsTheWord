@@ -2,6 +2,8 @@
 
 #include "skse64_common/SafeWrite.h"
 
+#include <vector>
+
 #include "Settings.h"
 
 #include "RE/Skyrim.h"
@@ -13,21 +15,21 @@ namespace
 	class PlayerCharacterEx : public RE::PlayerCharacter
 	{
 	public:
-		void TryToSteal(RE::TESObjectREFR* a_containerOrItem, RE::BaseExtraList* a_extraList)
+		void TryToSteal(RE::TESObjectREFR* a_fromRefr, RE::TESForm* a_item, RE::BaseExtraList* a_extraList)
 		{
-			if (!a_containerOrItem) {
+			if (!a_fromRefr) {
 				return;
 			}
 
 			if (Settings::useThreshold) {
-				auto value = a_containerOrItem->baseForm->GetValue();
+				auto value = a_item->GetGoldValue();
 				if (value > Settings::costThreshold) {
 					return;
 				}
 			}
 
 			bool stolen = false;
-			auto owner = a_containerOrItem->GetOwner();
+			auto owner = a_fromRefr->GetOwner();
 			if (owner && owner != this) {
 				stolen = true;
 				if (owner->Is(RE::FormType::Faction)) {
@@ -39,21 +41,28 @@ namespace
 			}
 
 			if (stolen) {
-				bool detected = false;
 				auto data010 = processManager->unk010;
-				RE::BSReadLockGuard locker(data010->knowledgeDataLock);
-				for (auto& knowledgeData : data010->knowledgeData) {
-					auto knowledge = knowledgeData.knowledge;
-					if (knowledge) {
-						RE::TESObjectREFRPtr refr;
-						RE::TESObjectREFR::LookupByHandle(knowledge->toHandle, refr);
-						auto akRef = static_cast<RE::Actor*>(refr.get());
-						if (akRef) {
-							if (GetDetectionLevel(akRef) > 0 || akRef->GetDetectionLevel(this) > 0) {
-								detected = true;
-								break;
+				std::vector<RE::NiPointer<RE::Actor>> actors;
+				{
+					RE::BSReadLockGuard locker(data010->knowledgeDataLock);
+					for (auto& knowledgeData : data010->knowledgeData) {
+						auto knowledge = knowledgeData.knowledge;
+						if (knowledge) {
+							RE::TESObjectREFRPtr refr;
+							RE::TESObjectREFR::LookupByHandle(knowledge->toHandle, refr);
+							auto akRef = static_cast<RE::Actor*>(refr.get());
+							if (akRef) {
+								actors.emplace_back(akRef);
 							}
 						}
+					}
+				}
+
+				bool detected = false;
+				for (auto& actor : actors) {
+					if (GetDetectionLevel(actor.get()) > 0 || actor->GetDetectionLevel(this) > 0) {
+						detected = true;
+						break;
 					}
 				}
 
@@ -76,14 +85,14 @@ namespace
 				a_extraList = new RE::BaseExtraList();
 			}
 
-			TryToSteal(a_fromRefr, a_extraList);
+			TryToSteal(a_fromRefr, a_item, a_extraList);
 			_AddItem(this, a_item, a_extraList, a_count, a_fromRefr);
 		}
 
 
 		void Hook_PickUpItem(TESObjectREFR* a_item, UInt32 a_count, bool a_arg3, bool a_playSound)	// CC
 		{
-			TryToSteal(a_item, &a_item->extraData);
+			TryToSteal(a_item, a_item->baseForm, &a_item->extraData);
 			_PickUpItem(this, a_item, a_count, a_arg3, a_playSound);
 		}
 
