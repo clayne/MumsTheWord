@@ -7,5 +7,5 @@ bool Settings::loadSettings(bool a_dumpParse)
 }
 
 
-decltype(Settings::useThreshold)	Settings::useThreshold("useThreshold", true, true);
-decltype(Settings::costThreshold)	Settings::costThreshold("costThreshold", 500, true);
+decltype(Settings::useThreshold)	Settings::useThreshold("useThreshold", true);
+decltype(Settings::costThreshold)	Settings::costThreshold("costThreshold", 500);
