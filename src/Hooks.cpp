@@ -58,11 +58,14 @@ namespace
 					}
 				}
 
+				auto currentFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x0005C84E);
 				bool detected = false;
 				for (auto& actor : actors) {
-					if (GetDetectionLevel(actor.get()) > 0 || actor->GetDetectionLevel(this) > 0) {
-						detected = true;
-						break;
+					if (!actor->IsInFaction(currentFollowerFaction)) {
+						if (GetDetectionLevel(actor.get()) > 0 || actor->GetDetectionLevel(this) > 0) {
+							detected = true;
+							break;
+						}
 					}
 				}
 
