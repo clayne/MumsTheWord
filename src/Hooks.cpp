@@ -60,7 +60,7 @@ namespace
 
 				bool detected = false;
 				for (auto& actor : actors) {
-					if (!actor->IsPlayerTeammate() && actor->GetDetectionLevel(this) > 0) {
+					if (!actor->IsPlayerTeammate() && !actor->IsDead(true) && actor->GetDetectionLevel(this) > 0) {
 						detected = true;
 						break;
 					}
