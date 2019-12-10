@@ -17,7 +17,7 @@ namespace
 	public:
 		void TryToSteal(RE::TESObjectREFR* a_fromRefr, RE::TESForm* a_item, RE::BaseExtraList* a_extraList)
 		{
-			if (!a_fromRefr) {
+			if (!a_fromRefr || !aiProcess || !aiProcess->highProcess) {
 				return;
 			}
 
@@ -30,7 +30,9 @@ namespace
 
 			bool stolen = false;
 			auto owner = a_fromRefr->GetOwner();
-			if (owner && owner != this) {
+			if (!owner && a_fromRefr->Is(RE::FormType::ActorCharacter) && !a_fromRefr->IsDead(true)) {
+				stolen = a_fromRefr != this;
+			} else if (owner && owner != this) {
 				stolen = true;
 				if (owner->Is(RE::FormType::Faction)) {
 					auto faction = static_cast<RE::TESFaction*>(owner);
@@ -41,31 +43,26 @@ namespace
 			}
 
 			if (stolen) {
-				auto data010 = processManager->unk010;
+				auto highProcess = aiProcess->highProcess;
 				std::vector<RE::NiPointer<RE::Actor>> actors;
 				{
-					RE::BSReadLockGuard locker(data010->knowledgeDataLock);
-					for (auto& knowledgeData : data010->knowledgeData) {
+					RE::BSReadLockGuard locker(highProcess->knowledgeDataLock);
+					for (auto& knowledgeData : highProcess->knowledgeData) {
 						auto knowledge = knowledgeData.knowledge;
 						if (knowledge) {
-							RE::TESObjectREFRPtr refr;
-							RE::TESObjectREFR::LookupByHandle(knowledge->toHandle, refr);
-							auto akRef = static_cast<RE::Actor*>(refr.get());
+							auto akRef = RE::Actor::LookupByHandle(knowledge->toHandle);
 							if (akRef) {
-								actors.emplace_back(akRef);
+								actors.emplace_back(std::move(akRef));
 							}
 						}
 					}
 				}
 
-				auto currentFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x0005C84E);
 				bool detected = false;
 				for (auto& actor : actors) {
-					if (!actor->IsInFaction(currentFollowerFaction)) {
-						if (GetDetectionLevel(actor.get()) > 0 || actor->GetDetectionLevel(this) > 0) {
-							detected = true;
-							break;
-						}
+					if (!actor->IsPlayerTeammate() && actor->GetDetectionLevel(this) > 0) {
+						detected = true;
+						break;
 					}
 				}
 
