@@ -1,6 +1,4 @@
-﻿#include "skse64_common/skse_version.h"
-
-#include "Hooks.h"
+﻿#include "Hooks.h"
 #include "Settings.h"
 #include "version.h"
 
@@ -30,7 +28,7 @@ extern "C" {
 		case RUNTIME_VERSION_1_5_97:
 			break;
 		default:
-			_FATALERROR("Unsupported runtime version %s!\n", a_skse->UnmangledRuntimeVersion());
+			_FATALERROR("Unsupported runtime version %s!\n", a_skse->UnmangledRuntimeVersion().c_str());
 			return false;
 		}
 
@@ -46,7 +44,7 @@ extern "C" {
 			return false;
 		}
 
-		if (!Settings::loadSettings()) {
+		if (!Settings::LoadSettings()) {
 			return false;
 		}
 

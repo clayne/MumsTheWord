@@ -15,9 +15,9 @@ namespace
 	class PlayerCharacterEx : public RE::PlayerCharacter
 	{
 	public:
-		void TryToSteal(RE::TESObjectREFR* a_fromRefr, RE::TESForm* a_item, RE::BaseExtraList* a_extraList)
+		void TryToSteal(RE::TESObjectREFR* a_fromRefr, RE::TESForm* a_item, RE::ExtraDataList* a_extraList)
 		{
-			if (!a_fromRefr || !aiProcess || !aiProcess->highProcess) {
+			if (!a_fromRefr || !currentProcess || !currentProcess->high) {
 				return;
 			}
 
@@ -43,14 +43,14 @@ namespace
 			}
 
 			if (stolen) {
-				auto highProcess = aiProcess->highProcess;
+				auto high = currentProcess->high;
 				std::vector<RE::NiPointer<RE::Actor>> actors;
 				{
-					RE::BSReadLockGuard locker(highProcess->knowledgeDataLock);
-					for (auto& knowledgeData : highProcess->knowledgeData) {
-						auto knowledge = knowledgeData.knowledge;
+					RE::BSReadLockGuard locker(high->knowledgeLock);
+					for (auto& knowledgeData : high->knowledgeArray) {
+						auto& knowledge = knowledgeData.second;
 						if (knowledge) {
-							auto akRef = RE::Actor::LookupByHandle(knowledge->toHandle);
+							auto akRef = knowledge->target.get();
 							if (akRef) {
 								actors.emplace_back(std::move(akRef));
 							}
@@ -60,7 +60,7 @@ namespace
 
 				bool detected = false;
 				for (auto& actor : actors) {
-					if (!actor->IsPlayerTeammate() && !actor->IsDead(true) && actor->GetDetectionLevel(this) > 0) {
+					if (!actor->IsPlayerTeammate() && !actor->IsDead(true) && actor->RequestDetectionLevel(this) > 0) {
 						detected = true;
 						break;
 					}
@@ -79,45 +79,47 @@ namespace
 		}
 
 
-		void Hook_AddItem(RE::TESForm* a_item, RE::BaseExtraList* a_extraList, SInt32 a_count, RE::TESObjectREFR* a_fromRefr)	// 5A
+		void Hook_AddObjectToContainer(RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraList, SInt32 a_count, RE::TESObjectREFR* a_fromRefr)	// 5A
 		{
 			if (!a_extraList) {
-				a_extraList = new RE::BaseExtraList();
+				a_extraList = new RE::ExtraDataList();
 			}
 
-			TryToSteal(a_fromRefr, a_item, a_extraList);
-			_AddItem(this, a_item, a_extraList, a_count, a_fromRefr);
+			TryToSteal(a_fromRefr, a_object, a_extraList);
+			_AddObjectToContainer(this, a_object, a_extraList, a_count, a_fromRefr);
 		}
 
 
-		void Hook_PickUpItem(TESObjectREFR* a_item, UInt32 a_count, bool a_arg3, bool a_playSound)	// CC
+		void Hook_PickUpObject(TESObjectREFR* a_item, UInt32 a_count, bool a_arg3, bool a_playSound)	// CC
 		{
-			TryToSteal(a_item, a_item->baseForm, &a_item->extraData);
-			_PickUpItem(this, a_item, a_count, a_arg3, a_playSound);
+			TryToSteal(a_item, a_item->GetBaseObject(), &a_item->extraList);
+			_PickUpObject(this, a_item, a_count, a_arg3, a_playSound);
 		}
 
 
 		static void InstallHooks()
 		{
 			{
-				REL::Offset<AddItem_t**> vFunc(RE::Offset::PlayerCharacter::Vtbl + (0x8 * 0x5A));
-				_AddItem = *vFunc;
-				SafeWrite64(vFunc.GetAddress(), unrestricted_cast<std::uintptr_t>(&PlayerCharacterEx::Hook_AddItem));
+				REL::Offset<AddObjectToContainer_t**> vFunc(RE::Offset::PlayerCharacter::Vtbl + (0x8 * 0x5A));
+				_AddObjectToContainer = *vFunc;
+				SafeWrite64(vFunc.GetAddress(), unrestricted_cast<std::uintptr_t>(AddObjectToContainer_f));
 			}
 
 			{
-				REL::Offset<PickUpItem_t**> vFunc(RE::Offset::PlayerCharacter::Vtbl + (0x8 * 0xCC));
-				_PickUpItem = *vFunc;
-				SafeWrite64(vFunc.GetAddress(), unrestricted_cast<std::uintptr_t>(&PlayerCharacterEx::Hook_PickUpItem));
+				REL::Offset<PickUpObject_t**> vFunc(RE::Offset::PlayerCharacter::Vtbl + (0x8 * 0xCC));
+				_PickUpObject = *vFunc;
+				SafeWrite64(vFunc.GetAddress(), unrestricted_cast<std::uintptr_t>(PickUpObject_f));
 			}
 		}
 
 
-		using AddItem_t = function_type_t<decltype(&PlayerCharacterEx::AddItem)>;
-		inline static AddItem_t* _AddItem = 0;
+		static inline auto AddObjectToContainer_f = &PlayerCharacterEx::Hook_AddObjectToContainer;
+		using AddObjectToContainer_t = function_type_t<decltype(AddObjectToContainer_f)>;
+		inline static AddObjectToContainer_t* _AddObjectToContainer = 0;
 
-		using PickUpItem_t = function_type_t<decltype(&PlayerCharacterEx::PickUpItem)>;
-		inline static PickUpItem_t* _PickUpItem = 0;
+		static inline auto PickUpObject_f = &PlayerCharacterEx::Hook_PickUpObject;
+		using PickUpObject_t = function_type_t<decltype(PickUpObject_f)>;
+		inline static PickUpObject_t* _PickUpObject = 0;
 	};
 }
 
